@@ -62,7 +62,10 @@ export function Store({ children }) {
         onSnapshot(
           source,
           (snapshot) => {
-            const values = snapshot.docs.map((item) => ({ ...item.data(), id: item.id }))
+            const values = snapshot.docs.map((item) => {
+              const data=item.data()
+              return {...data,id:item.id,...(data.createdAt?.toDate?{createdAt:data.createdAt.toDate().toISOString()}:{})}
+            })
             if (['messages', 'orders'].includes(field))
               values.sort(
                 (a, b) =>
@@ -104,6 +107,17 @@ export function Store({ children }) {
         if (!user) return
         let role = 'customer'
         let gotAccount = false
+        let gotRole = false
+        let metadata = null
+        const profiles = {}
+        let dataStops = []
+        const hydrate=()=>{
+          if(!metadata||!gotRole||!profiles.Personal||!profiles.Professional)return
+          const data={...metadata,drafts:{Personal:profiles.Personal.draft,Professional:profiles.Professional.draft},published:{Personal:profiles.Personal.published,Professional:profiles.Professional.published}}
+          confirmed.current=data
+          gotAccount=true
+          if(!pending.current)apply({...data,session:metadata.closed?null:role,authReady:true,syncError:metadata.closed?'This account is closed.':''})
+        }
         const userError = (problem) => {
           error(problem)
           apply({ authReady: true })
@@ -118,14 +132,13 @@ export function Store({ children }) {
                 return
               }
               const data = snapshot.data()
+              metadata=data
               if (data.closed) {
                 apply({ authReady: true, session: null, syncError: 'This account is closed.' })
                 return
               }
-              confirmed.current = data
-              if (!pending.current)
-                apply({ ...data, session: role, authReady: true, syncError: '' })
-              gotAccount = true
+              metadata=data
+              hydrate()
             },
             userError,
           ),
@@ -136,28 +149,36 @@ export function Store({ children }) {
             (snapshot) => {
               if (turn !== generation) return
               role = snapshot.data()?.enabled === true ? 'admin' : 'customer'
+              gotRole=true
+              hydrate()
               if (gotAccount)
                 apply({
-                  session: role,
+                  session: metadata?.closed?null:role,
                   cards: [],
                   orders: [],
                   messages: [],
                   contactRequests: [],
                   customers: [],
                 })
-              userStops.slice(2).forEach((stop) => stop())
-              userStops = userStops.slice(0, 2)
+              dataStops.forEach((stop)=>stop())
+              dataStops=[]
               const owned = (field) =>
                 role === 'admin'
                   ? collection(db, field)
                   : query(collection(db, field), where('ownerUid', '==', user.uid))
               for (const field of ['cards', 'orders', 'messages', 'contactRequests'])
-                list(owned(field), field, userStops)
-              if (role === 'admin') list(collection(db, 'users'), 'customers', userStops)
+                list(owned(field), field, dataStops)
+              if (role === 'admin') list(collection(db, 'users'), 'customers', dataStops)
             },
             error,
           ),
         )
+        for(const mode of ['Personal','Professional'])userStops.push(onSnapshot(doc(db,'users',user.uid,'profiles',mode),snapshot=>{
+          if(turn!==generation)return
+          if(snapshot.exists())profiles[mode]=snapshot.data()
+          hydrate()
+        },userError))
+        userStops.push(()=>dataStops.forEach(stop=>stop()))
       },
       error,
     )
@@ -230,7 +251,8 @@ export function Store({ children }) {
         if (auth.currentUser?.uid !== identity) return false
         try {
           if (Object.keys(fields).length) {
-            const saved = await call('saveWorkspace', { change: await uploadImages(fields) })
+            const profileModes=Object.fromEntries(['drafts','published'].filter(field=>fields[field]).map(field=>[field,['Personal','Professional'].filter(mode=>changed(before[field]?.[mode],fields[field][mode]))]))
+            const saved = await call('saveWorkspace', { change: await uploadImages(fields),profileModes })
             confirmed.current = { ...confirmed.current, ...saved }
           }
           for (const { action, ...data } of writes) await call(action, await uploadImages(data))

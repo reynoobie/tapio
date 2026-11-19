@@ -1,3 +1,4 @@
+import {CloudImage} from './components/CloudImage'
 import {Link,NavLink,useLocation} from 'react-router-dom'
 import {ArrowLeft,ArrowUpRight, Radio, Nfc, X} from 'lucide-react'
 import {safeLink} from './data'
@@ -28,7 +29,7 @@ export function Button({to,children,kind='',className='',...props}){
   return to ? <Link to={to} className={classes} {...props}>{children}</Link> : <button className={classes} type="button" {...props}>{children}</button>
 }
 export function CardArt({tone='onyx',large=false,mark,name,placement}){
-  return <div className={'card-art '+tone+(large?' large':'')} aria-hidden="true"><div><Radio/> tap.io</div><Nfc className="card-nfc"/>{mark&&<img src={mark} className="custom-mark" alt=""/>}{name&&<strong className={'custom-name '+(placement==='Center'?'center':'')}>{name}</strong>}<small>NFC DIGITAL CARD</small></div>
+  return <div className={'card-art '+tone+(large?' large':'')} aria-hidden="true"><div><Radio/> tap.io</div><Nfc className="card-nfc"/>{mark&&<CloudImage src={mark} className="custom-mark" alt=""/>}{name&&<strong className={'custom-name '+(placement==='Center'?'center':'')}>{name}</strong>}<small>NFC DIGITAL CARD</small></div>
 }
 export function Dialog({title,children,close,className=''}){
   return <dialog ref={element=>{if(element&&!element.open)element.showModal()}} onCancel={close} className={'dialog '+className} aria-label={title}>

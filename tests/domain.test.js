@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { priceOrder, publicProfile, validUsername } from '../domain.js'
+import { priceOrder, publicProfile, validUsername } from '../src/lib/domain.js'
 
 test('public profiles exclude hidden contacts and hidden sections', () => {
   const privateProfile = {

@@ -10,7 +10,15 @@ export async function compressImage(file){
     const canvas=document.createElement('canvas')
     canvas.width=Math.max(1,Math.round(image.width*scale))
     canvas.height=Math.max(1,Math.round(image.height*scale))
-    canvas.getContext('2d').drawImage(image,0,0,canvas.width,canvas.height)
-    return canvas.toDataURL('image/webp',.8)
+    for(let attempt=0;attempt<5;attempt++){
+      canvas.getContext('2d').drawImage(image,0,0,canvas.width,canvas.height)
+      for(const quality of [.8,.65,.5]){
+        const result=canvas.toDataURL('image/webp',quality)
+        if(result.length<=180000)return result
+      }
+      canvas.width=Math.max(1,Math.round(canvas.width*.75))
+      canvas.height=Math.max(1,Math.round(canvas.height*.75))
+    }
+    throw new Error('This image could not be compressed. Choose a smaller image.')
   }finally{URL.revokeObjectURL(url)}
 }

@@ -1,3 +1,4 @@
+import {CloudImage} from './CloudImage'
 import {useRef,useState} from 'react'
 import {Button} from '../ui'
 import {useStore} from '../store'
@@ -18,7 +19,7 @@ export default function ImageField({label,value,onChange,accept='image/png,image
   }
   return <div className="image-field">
     <input hidden ref={input} type="file" accept={accept} onChange={choose} aria-label={label}/>
-    {value&&<img className="image-field-preview" src={value} alt={label}/>}
+    {value&&<CloudImage className="image-field-preview" src={value} alt={label}/>}
     <div className="actions">
       <Button kind="secondary" disabled={busy} onClick={()=>input.current?.click()}>{busy?'Preparing image…':value?'Replace '+label.toLowerCase():label}</Button>
       {value&&<Button kind="secondary" disabled={busy} onClick={()=>onChange('')}>Remove</Button>}

@@ -1,8 +1,10 @@
+import {CloudImage,useImageUrl} from './components/CloudImage'
 import {useEffect,useState} from 'react'
 import {Link,useLocation,useParams} from 'react-router-dom'
 import {ArrowLeft,AtSign,Briefcase,CalendarDays,Contact,FileText,Globe,Image,Link2,Mail,MapPin,Music,Package,PenLine,Phone,QrCode,Share2,ShoppingBag,UserRound} from 'lucide-react'
 import {doc,onSnapshot} from 'firebase/firestore'
 import {db,call} from './lib/firebase'
+import {imagePrefix} from './lib/firestore-actions'
 import {publicUrl} from './lib/urls'
 import {safeLink} from './data'
 import {useStore} from './store'
@@ -12,7 +14,7 @@ import {ShareProfile} from './share'
 import {saveContact} from './lib/vcf'
 import {SocialIcon} from './social-icons'
 import {ThemeToggle,useSiteTheme} from './site-theme'
-const image = value => /^data:image\/(png|jpeg|webp|gif);base64,/.test(value||'') ? value : safeLink(value)
+const image = value => value?.startsWith(imagePrefix)||/^data:image\/(png|jpeg|webp|gif);base64,/.test(value||'') ? value : safeLink(value)
 function formatPhone(phone){
   if(!phone)return ''
   const digits=phone.replace(/\D/g,'')
@@ -32,7 +34,8 @@ export function ProfileView({profile:p,mode,publicView=false,onEdit,editing=fals
   const professional=mode==='Professional'
   const custom=p.theme==='Custom'
   const accent=p.accent||'#5267e8'
-  const backgroundImage=p.background==='Uploaded image'&&image(p.backgroundImage)
+  const resolvedBackground=useImageUrl(image(p.backgroundImage))
+  const backgroundImage=p.background==='Uploaded image'&&resolvedBackground
   const accessibleInk=(color,background)=>color&&contrast(color,background)>=4.5
     ?color:contrast('#000000',background)>=4.5?'#000000':readableInk(background)
   const profileTheme=publicView&&siteTheme==='dark'&&!custom?'Dark':p.theme
@@ -70,8 +73,8 @@ export function ProfileView({profile:p,mode,publicView=false,onEdit,editing=fals
   }
   const layout=({'Bento Grid':'bento',Centered:'centered',Compact:'compact'})[p.layout]||'stack'
   return <article onClick={event=>{if(publicView&&event.target.closest('a[href]'))call('track',{username:p.username,event:'links'}).catch(()=>{})}} className={`digital-profile polished-profile layout-${layout}${profileTheme==='Dark'?' profile-dark':profileTheme==='Light'?' profile-light':''}${custom?' profile-custom':''}${backgroundImage?' profile-photo-background':''}`} style={style}>
-    <div className="profile-cover">{image(p.cover)&&<img src={image(p.cover)} alt=""/>}</div>
-    <div className="profile-avatar">{image(p.avatar)?<img src={image(p.avatar)} alt=""/>:<UserRound size={30}/>}</div>
+    <div className="profile-cover">{image(p.cover)&&<CloudImage src={image(p.cover)} alt=""/>}</div>
+    <div className="profile-avatar">{image(p.avatar)?<CloudImage src={image(p.avatar)} alt=""/>:<UserRound size={30}/>}</div>
     <NameHeading className="profile-name">{identity('name',p.name||'Your name')}</NameHeading>
     {!professional&&p.username&&<small className="profile-subtitle">@{p.username}</small>}
     {professional&&(p.title||p.company)&&<p className="profile-subtitle">{[p.title,p.company].filter(Boolean).join(' · ')}</p>}
@@ -94,7 +97,7 @@ export function ProfileView({profile:p,mode,publicView=false,onEdit,editing=fals
       return <section key={section.id} className={social?'profile-social-section':isContact?'profile-contact-section':undefined}>
         <h3>{onEdit?<button type="button" className="preview-text-target" onClick={activate(type,index)}>{heading}</button>:heading}</h3>
         {editing&&onEdit&&<button type="button" className="profile-pencil icon" aria-label={'Edit '+type} onClick={activate(type,index)}><PenLine size={15}/></button>}
-        {empty?<p>{social||type==='Link Buttons'?'Add your first link.':isContact?'Add your contact details.':'Add something to this section.'}</p>:social?<div className="profile-social-icons">{list.map((link,i)=><a key={i} href={safeLink(link.url)} target="_blank" rel="noreferrer" aria-label={link.platform&&link.platform!=='Custom'?link.platform:link.label||new URL(safeLink(link.url)).hostname}><SocialIcon link={link}/></a>)}</div>:type==='Link Buttons'?<div className="profile-links">{list.map((link,i)=><ProfileLink key={i} url={link.url}>{link.label||'Open link'}</ProfileLink>)}</div>:isContact?<div className="profile-contact-rows">{contactRows.map(([RowIcon,value,href])=><a key={href} href={href} title={value} target={RowIcon===Globe?'_blank':undefined} rel="noreferrer"><RowIcon size={17} aria-hidden="true"/><span>{value}</span></a>)}</div>:<>{section.body&&<p>{section.body}</p>}{gallery&&<img loading="lazy" className="gallery-image" src={gallery} alt="Profile gallery"/>}<ProfileLink url={section.url}>{section.linkLabel||'Open link'}</ProfileLink></>}
+        {empty?<p>{social||type==='Link Buttons'?'Add your first link.':isContact?'Add your contact details.':'Add something to this section.'}</p>:social?<div className="profile-social-icons">{list.map((link,i)=><a key={i} href={safeLink(link.url)} target="_blank" rel="noreferrer" aria-label={link.platform&&link.platform!=='Custom'?link.platform:link.label||new URL(safeLink(link.url)).hostname}><SocialIcon link={link}/></a>)}</div>:type==='Link Buttons'?<div className="profile-links">{list.map((link,i)=><ProfileLink key={i} url={link.url}>{link.label||'Open link'}</ProfileLink>)}</div>:isContact?<div className="profile-contact-rows">{contactRows.map(([RowIcon,value,href])=><a key={href} href={href} title={value} target={RowIcon===Globe?'_blank':undefined} rel="noreferrer"><RowIcon size={17} aria-hidden="true"/><span>{value}</span></a>)}</div>:<>{section.body&&<p>{section.body}</p>}{gallery&&<CloudImage loading="lazy" className="gallery-image" src={gallery} alt="Profile gallery"/>}<ProfileLink url={section.url}>{section.linkLabel||'Open link'}</ProfileLink></>}
       </section>
     })}</div>
     {publicView&&mode==='Professional'&&p.contactBack&&<Button kind="secondary" onClick={()=>setReturnContact('Share your contact')}>Share Your Contact</Button>}
@@ -109,7 +112,18 @@ export function PublicProfile(){
   const {state:routeState}=useLocation()
   const {state}=useStore()
   const [loaded,setLoaded]=useState(null)
-  useEffect(()=>onSnapshot(doc(db,'publicProfiles',username),snapshot=>setLoaded({username,data:snapshot.data()}),error=>setLoaded({username,error:error.message})),[username])
+  useEffect(()=>{
+    let stopMode=()=>{}
+    const fail=error=>setLoaded({username,error:error.message})
+    const stop=onSnapshot(doc(db,'publicProfiles',username),snapshot=>{
+      stopMode()
+      const root=snapshot.data()
+      if(!root){setLoaded({username,data:null});return}
+      setLoaded(null)
+      stopMode=onSnapshot(doc(db,'publicProfiles',username,'modes',root.active),mode=>setLoaded({username,data:{...root,profile:mode.data()?.profile}}),fail)
+    },fail)
+    return ()=>{stop();stopMode()}
+  },[username])
   const record=loaded?.username===username?loaded:null
   const published=record?.data?.profile
   useEffect(()=>{

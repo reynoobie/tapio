@@ -1,3 +1,4 @@
+import {CloudImage,useImageUrl} from './components/CloudImage'
 import {useRef,useState} from 'react'
 import {Navigate,useNavigate,useParams} from 'react-router-dom'
 import {Button,Empty,Field} from './ui'
@@ -70,6 +71,7 @@ export function OrderDetail({confirmation=false,admin=false}){
   const {orderId}=useParams()
   const {state,update,setNotice}=useStore()
   const order=state.orders.find(item=>item.id===orderId)
+  const proofUrl=useImageUrl(order?.paymentProof)
   const allowed=order&&(confirmation||admin||order.customerId===state.account.username||(!('customerId' in order)&&order.customer===state.account.name))
   if(!allowed)return <main className={confirmation?'shell section':''}><Empty title="Order unavailable"><Button to={confirmation?'/shop':'/app/orders'}>Go Back</Button></Empty></main>
   const paid=isPaid(order)
@@ -92,11 +94,11 @@ export function OrderDetail({confirmation=false,admin=false}){
       {!admin&&!paid&&<>
         <p>Pay using the GCash details below and upload your receipt for verification.</p>
         {details.number&&<p>GCash number: {details.number}</p>}
-        {details.qr&&<img className="payment-qr" src={details.qr} alt="GCash QR"/>}
+        {details.qr&&<CloudImage className="payment-qr" src={details.qr} alt="GCash QR"/>}
         {!details.number&&!details.qr&&<p>GCash details have not been configured.</p>}
         <ImageField label="Upload payment proof" value={order.paymentProof} onChange={updateProof}/>
       </>}
-      {order.paymentProof&&(admin||paid)&&<a href={order.paymentProof} download={order.id+'-receipt.webp'} aria-label="Download submitted payment proof"><img className="payment-qr" src={order.paymentProof} alt="Submitted payment proof"/></a>}
+      {order.paymentProof&&(admin||paid)&&<a href={proofUrl} download={order.id+'-receipt.webp'} aria-label="Download submitted payment proof"><CloudImage className="payment-qr" src={order.paymentProof} alt="Submitted payment proof"/></a>}
       {admin&&!paid&&order.paymentProof&&<div className="actions">
         <Button onClick={()=>revise(item=>item.paymentProof?{...item,payment:'Paid'}:item)}>Mark as paid</Button>
         {paymentLabel(order)!=='Proof rejected'&&<Button kind="secondary" onClick={()=>revise(item=>isPaid(item)?item:{...item,payment:'Rejected'})}>Reject proof</Button>}

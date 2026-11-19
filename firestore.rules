@@ -2,19 +2,144 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() { return request.auth != null; }
+    function own(uid) { return signedIn() && request.auth.uid == uid; }
     function admin() { return signedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid)) && get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.enabled == true; }
-    match /admins/{uid} { allow get: if signedIn() && request.auth.uid == uid; }
-    match /users/{uid} { allow read: if admin() || (signedIn() && request.auth.uid == uid); }
-    match /publicProfiles/{username} { allow get: if true; }
-    match /cards/{id} { allow get: if true; allow list: if admin() || (signedIn() && resource.data.ownerUid == request.auth.uid); }
-    match /products/{id} { allow read: if true; }
-    match /settings/store { allow read: if true; }
-    match /orders/{id} { allow read: if admin() || (signedIn() && resource.data.ownerUid == request.auth.uid); }
-    match /messages/{id} { allow read: if admin() || (signedIn() && resource.data.ownerUid == request.auth.uid); }
-    match /analytics/{uid}/days/{day} { allow read: if admin() || (signedIn() && request.auth.uid == uid); }
-    match /contactRequests/{id} { allow read: if admin() || (signedIn() && resource.data.ownerUid == request.auth.uid); }
-    // All writes, username reservations, activation secrets, and price checks
-    // go through the authenticated callable backend.
-    match /{document=**} { allow read, write: if false; }
+    function openUser() { return signedIn() && getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.closed == false; }
+    function username() { return getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.account.username; }
+    function mode(value) { return value in ['Personal','Professional']; }
+    function profile(value) { return value == null || (value is map && value.name is string && value.name.size() <= 100 && value.sections is list && value.sections.size() <= 40 && value.links is list && value.links.size() <= 60 && value.buttons is list && value.buttons.size() <= 60 && value.bio is string && value.bio.size() <= 160); }
+    function ownedImage(value) { return value == '' || (value is string && value.matches('tapio-image:[A-Za-z0-9_-]+') && get(/databases/$(database)/documents/images/$(value.replace('tapio-image:', ''))).data.ownerUid == request.auth.uid); }
+    function publicContact(value, source, field) { return value[field] == ((source.get('privacy', {}).get(field, 'Public') == 'Public') ? source[field] : ''); }
+    function visibleSection(sections, i) { return sections.size() <= i || sections[i].get('hidden', false) == false; }
+    function projection(value, source) {
+      return source != null && value.diff(source).affectedKeys().hasOnly(['email','phone','website','sections'])
+        && publicContact(value,source,'email') && publicContact(value,source,'phone') && publicContact(value,source,'website')
+        && value.sections.toSet().hasOnly(source.sections.toSet())
+        && visibleSection(value.sections, 0) && visibleSection(value.sections, 1) && visibleSection(value.sections, 2) && visibleSection(value.sections, 3) && visibleSection(value.sections, 4) && visibleSection(value.sections, 5) && visibleSection(value.sections, 6) && visibleSection(value.sections, 7) && visibleSection(value.sections, 8) && visibleSection(value.sections, 9) && visibleSection(value.sections, 10) && visibleSection(value.sections, 11) && visibleSection(value.sections, 12) && visibleSection(value.sections, 13) && visibleSection(value.sections, 14) && visibleSection(value.sections, 15) && visibleSection(value.sections, 16) && visibleSection(value.sections, 17) && visibleSection(value.sections, 18) && visibleSection(value.sections, 19) && visibleSection(value.sections, 20) && visibleSection(value.sections, 21) && visibleSection(value.sections, 22) && visibleSection(value.sections, 23) && visibleSection(value.sections, 24) && visibleSection(value.sections, 25) && visibleSection(value.sections, 26) && visibleSection(value.sections, 27) && visibleSection(value.sections, 28) && visibleSection(value.sections, 29) && visibleSection(value.sections, 30) && visibleSection(value.sections, 31) && visibleSection(value.sections, 32) && visibleSection(value.sections, 33) && visibleSection(value.sections, 34) && visibleSection(value.sections, 35) && visibleSection(value.sections, 36) && visibleSection(value.sections, 37) && visibleSection(value.sections, 38) && visibleSection(value.sections, 39);
+    }
+    function validLine(items, i) {
+      return items.size() <= i || validItem(items[i]);
+    }
+    function validItem(item) {
+      let product = get(/databases/$(database)/documents/products/$(item.productId)).data;
+      return product.available == true
+        && item.name == product.name && item.price == product.price && item.price >= 0
+        && item.quantity is int && item.quantity >= 1 && item.quantity <= 100
+        && (product.tone != 'cobalt' || (item.get('design',{}).get('name','').matches('.*[^ ].*') && item.design.name.size() <= 26));
+    }
+    function lineTotal(items, i) { return items.size() <= i ? 0 : (validItem(items[i]) ? items[i].price * items[i].quantity : null); }
+    function priced(order) {
+      return order.items is list && order.items.size() >= 1 && order.items.size() <= 8
+        && order.total == math.round((lineTotal(order.items, 0) + lineTotal(order.items, 1) + lineTotal(order.items, 2) + lineTotal(order.items, 3) + lineTotal(order.items, 4) + lineTotal(order.items, 5) + lineTotal(order.items, 6) + lineTotal(order.items, 7)) * 100) / 100;
+    }
+    match /admins/{uid} { allow get: if own(uid); }
+    match /users/{uid} {
+      allow read: if own(uid) || admin();
+      allow create: if own(uid) && request.resource.data.keys().hasOnly(['account','active','cart','cartDesigns','messageRead','checklistHidden','closed'])
+        && request.resource.data.account.uid == uid && request.resource.data.account.email == request.auth.token.email
+        && request.resource.data.account.name is string && request.resource.data.account.name.size() > 0 && request.resource.data.account.name.size() <= 100
+        && request.resource.data.account.username.matches('[a-z][a-z0-9-]{2,23}') && !(request.resource.data.account.username in ['admin','login','support','tapio'])
+        && getAfter(/databases/$(database)/documents/usernames/$(request.resource.data.account.username)).data.uid == uid
+        && request.resource.data.active == 'Personal' && request.resource.data.closed == false;
+      allow update: if own(uid) && resource.data.closed == false
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['account','active','cart','cartDesigns','checklistHidden','messageRead','closed'])
+        && request.resource.data.account.diff(resource.data.account).affectedKeys().hasOnly(['name','notifications','shared'])
+        && request.resource.data.account.name is string && request.resource.data.account.name.size() > 0 && request.resource.data.account.name.size() <= 100
+        && mode(request.resource.data.active) && request.resource.data.closed is bool
+        && (request.resource.data.active == resource.data.active || getAfter(/databases/$(database)/documents/users/$(uid)/profiles/$(request.resource.data.active)).data.published != null);
+      match /profiles/{profileMode} {
+        allow read: if own(uid);
+        allow create, update: if own(uid) && openUser() && mode(profileMode)
+          && request.resource.data.keys().hasOnly(['draft','published']) && profile(request.resource.data.draft) && request.resource.data.draft != null && profile(request.resource.data.published);
+      }
+    }
+    match /usernames/{name} {
+      allow get: if signedIn();
+      allow create: if signedIn() && request.resource.data.keys().hasOnly(['uid']) && request.resource.data.uid == request.auth.uid
+        && getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.account.username == name;
+    }
+    match /publicProfiles/{name} {
+      allow get: if true;
+      allow create, update: if openUser() && username() == name && request.resource.data.uid == request.auth.uid
+        && request.resource.data.username == name && mode(request.resource.data.active)
+        && request.resource.data.active == getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.active
+        && request.resource.data.keys().hasOnly(['uid','username','active','contactRequestsAllowed','updatedAt'])
+        && request.resource.data.contactRequestsAllowed is bool && request.resource.data.updatedAt == request.time;
+      allow delete: if signedIn() && resource.data.uid == request.auth.uid;
+      match /modes/{profileMode} {
+        allow get: if true;
+        allow create, update: if openUser() && username() == name && mode(profileMode)
+          && request.resource.data.keys().hasOnly(['uid','profile','updatedAt']) && request.resource.data.uid == request.auth.uid && request.resource.data.updatedAt == request.time
+          && projection(request.resource.data.profile, getAfter(/databases/$(database)/documents/users/$(request.auth.uid)/profiles/$(profileMode)).data.published);
+        allow delete: if signedIn() && username() == name;
+      }
+    }
+    match /images/{id} {
+      allow get: if resource.data.public == true || own(resource.data.ownerUid) || admin() || (signedIn() && !exists(/databases/$(database)/documents/images/$(id)));
+      allow list: if own(resource.data.ownerUid) || admin();
+      allow create: if openUser() && request.resource.data.keys().hasOnly(['ownerUid','data','public','createdAt'])
+        && request.resource.data.ownerUid == request.auth.uid && request.resource.data.public == false && request.resource.data.createdAt == request.time
+        && request.resource.data.data is string && request.resource.data.data.size() <= 180000 && request.resource.data.data.matches('data:image/(webp|png|jpeg|gif);base64,[A-Za-z0-9+/=]+');
+      allow update: if own(resource.data.ownerUid) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['public']) && request.resource.data.public is bool && (!request.resource.data.public || openUser());
+      allow delete: if own(resource.data.ownerUid);
+    }
+    match /products/{id} { allow read: if true; allow write: if admin(); }
+    match /settings/store { allow read: if true; allow write: if admin(); }
+    match /cardSecrets/{id} { allow read, write: if admin(); }
+    match /cards/{id} {
+      allow get: if true;
+      allow list: if own(resource.data.ownerUid) || admin();
+      allow create: if admin() && request.resource.data.id == id && request.resource.data.status == 'Unclaimed' && request.resource.data.ownerUid == '' && request.resource.data.owner == '';
+      allow update: if (openUser() && resource.data.status == 'Unclaimed' && resource.data.ownerUid == ''
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ownerUid','owner','status','activated','claimHash'])
+        && request.resource.data.ownerUid == request.auth.uid && request.resource.data.owner == username() && request.resource.data.status == 'Claimed'
+        && request.resource.data.claimHash == get(/databases/$(database)/documents/cardSecrets/$(id)).data.hash)
+        || (((own(resource.data.ownerUid) && (openUser() || request.resource.data.status == 'Disabled')) || admin()) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name','status'])
+        && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 100
+        && request.resource.data.status in ['Claimed','Disabled'] && resource.data.ownerUid != '');
+    }
+    match /orders/{id} {
+      allow get: if signedIn() && (!exists(/databases/$(database)/documents/orders/$(id)) || own(resource.data.ownerUid) || admin());
+      allow list: if own(resource.data.ownerUid) || admin();
+      allow create: if openUser() && request.resource.data.ownerUid == request.auth.uid && request.resource.data.customerId == username()
+        && request.resource.data.keys().hasOnly(['id','ownerUid','customerId','customer','shippingDetails','items','total','payment','shipping','date','createdAt'])
+        && request.resource.data.id == id && request.resource.data.payment == 'Pending' && request.resource.data.shipping == 'Pending' && request.resource.data.createdAt == request.time
+        && request.resource.data.shippingDetails.name is string && request.resource.data.shippingDetails.name.size() > 0 && request.resource.data.shippingDetails.name.size() <= 100
+        && request.resource.data.shippingDetails.address is string && request.resource.data.shippingDetails.address.size() > 0 && request.resource.data.shippingDetails.address.size() <= 1000
+        && request.resource.data.shippingDetails.phone.matches('[+0-9 ()-]{7,25}') && priced(request.resource.data);
+      allow update: if (openUser() && own(resource.data.ownerUid) && resource.data.payment != 'Paid'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['paymentProof','payment']) && request.resource.data.payment == 'Pending' && ownedImage(request.resource.data.paymentProof))
+        || (admin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['payment','shipping'])
+          && ((request.resource.data.payment == resource.data.payment && resource.data.payment == 'Paid' && request.resource.data.shipping in ['Pending','Packing','Shipped','Delivered'])
+            || (resource.data.payment != 'Paid' && resource.data.get('paymentProof','') != '' && request.resource.data.payment in ['Paid','Rejected'] && request.resource.data.shipping == resource.data.shipping)));
+    }
+    match /messages/{id} {
+      allow get: if signedIn() && (!exists(/databases/$(database)/documents/messages/$(id)) || own(resource.data.ownerUid) || admin());
+      allow list: if own(resource.data.ownerUid) || admin();
+      allow create: if openUser() && request.resource.data.keys().hasOnly(['id','ownerUid','authorUid','sender','text','image','createdAt']) && request.resource.data.authorUid == request.auth.uid
+        && ((own(request.resource.data.ownerUid) && request.resource.data.sender == 'customer') || (admin() && request.resource.data.sender == 'admin'))
+        && request.resource.data.text is string && request.resource.data.text.size() <= 2000 && ownedImage(request.resource.data.image)
+        && (request.resource.data.text.size() > 0 || request.resource.data.image != '') && request.resource.data.createdAt == request.time;
+    }
+    match /transferRequests/{id} {
+      allow read: if own(resource.data.ownerUid) || admin();
+      allow create, update: if openUser() && request.resource.data.keys().hasOnly(['cardId','ownerUid','createdAt','status']) && request.resource.data.ownerUid == request.auth.uid
+        && get(/databases/$(database)/documents/cards/$(id)).data.ownerUid == request.auth.uid && request.resource.data.cardId == id && request.resource.data.status == 'Pending' && request.resource.data.createdAt == request.time;
+    }
+    match /contactRequests/{id} {
+      allow read: if own(resource.data.ownerUid) || admin();
+      allow create: if request.resource.data.keys().hasOnly(['name','email','ownerUid','username','request','date','createdAt'])
+        && get(/databases/$(database)/documents/publicProfiles/$(request.resource.data.username)).data.contactRequestsAllowed == true
+        && get(/databases/$(database)/documents/publicProfiles/$(request.resource.data.username)).data.uid == request.resource.data.ownerUid
+        && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 100
+        && request.resource.data.email.matches('[^ @]+@[^ @]+[.][^ @]+') && request.resource.data.email.size() <= 254
+        && request.resource.data.request is string && request.resource.data.request.size() <= 100 && request.resource.data.createdAt == request.time;
+    }
+    match /analytics/{uid}/events/{id} {
+      allow read: if own(uid) || admin();
+      allow create: if request.resource.data.keys().hasOnly(['ownerUid','username','event','day','createdAt']) && request.resource.data.ownerUid == uid
+        && get(/databases/$(database)/documents/publicProfiles/$(request.resource.data.username)).data.uid == uid
+        && request.resource.data.event in ['taps','links','contacts'] && request.resource.data.day.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}') && request.resource.data.createdAt == request.time;
+    }
   }
 }

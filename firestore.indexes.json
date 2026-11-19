@@ -1,0 +1,9 @@
+{
+  "indexes": [],
+  "fieldOverrides": [
+    {"collectionGroup":"images","fieldPath":"data","indexes":[]},
+    {"collectionGroup":"profiles","fieldPath":"draft","indexes":[]},
+    {"collectionGroup":"profiles","fieldPath":"published","indexes":[]},
+    {"collectionGroup":"modes","fieldPath":"profile","indexes":[]}
+  ]
+}

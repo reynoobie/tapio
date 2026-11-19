@@ -1,3 +1,4 @@
+import {CloudImage} from './components/CloudImage'
 import {useEffect,useRef,useState} from 'react'
 import {Link,NavLink,Navigate,Outlet,useLocation,useNavigate,useParams,useSearchParams} from 'react-router-dom'
 import {ArrowUpRight,ChevronDown,Menu,House,Layers,Nfc,Ellipsis,Package,Settings as SettingsIcon,Users,CreditCard,ShoppingBag,Check,Circle,MessageCircle,Copy,Minus,Maximize2,X,ImagePlus,Send} from 'lucide-react'
@@ -328,7 +329,7 @@ export function Payments(){
   const [number,setNumber]=useState(state.paymentDetails.number)
   useEffect(()=>setNumber(state.paymentDetails.number),[state.paymentDetails.number])
   async function qrChange(event){try{const file=event.target.files?.[0];if(file)update({paymentDetails:{...state.paymentDetails,qr:await compressImage(file)}})}catch(error){setNotice(error.message)}event.target.value=''}
-  return <main><PageHead title="Payments" description="Manual GCash payment settings."/><div className="grid-two"><section className="panel"><h2>GCash details</h2><p>Add the GCash number and QR image customers should use to pay.</p><form onSubmit={async event=>{event.preventDefault();if(await update({paymentDetails:{...state.paymentDetails,number:number.trim()}}))setNotice('Payment details saved.')}}><Field label="GCash number" value={number} onChange={setNumber} placeholder="Not configured"/><label className="field"><span>GCash QR image</span><input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={qrChange}/></label>{state.paymentDetails.qr&&<><img className="payment-qr" src={state.paymentDetails.qr} alt="GCash QR"/><Button kind="secondary" onClick={()=>update({paymentDetails:{...state.paymentDetails,qr:''}})}>Remove QR</Button></>}<button className="button">Save GCash number</button></form></section><section className="panel"><h2>Verification queue</h2><Field label="Show payments" options={['Pending proofs','All payments']} value={filter} onChange={setFilter}/>{orders.length?orders.map(order=><div className="list-row" key={order.id}><Link to={'/admin/orders/'+order.id}>{order.id}</Link><span>{money(order.total)} · {paymentLabel(order)}</span></div>):<p>No payments match this filter.</p>}<div className="actions"><Button to="/admin/orders" kind="secondary">Review orders</Button></div></section></div></main>
+  return <main><PageHead title="Payments" description="Manual GCash payment settings."/><div className="grid-two"><section className="panel"><h2>GCash details</h2><p>Add the GCash number and QR image customers should use to pay.</p><form onSubmit={async event=>{event.preventDefault();if(await update({paymentDetails:{...state.paymentDetails,number:number.trim()}}))setNotice('Payment details saved.')}}><Field label="GCash number" value={number} onChange={setNumber} placeholder="Not configured"/><label className="field"><span>GCash QR image</span><input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={qrChange}/></label>{state.paymentDetails.qr&&<><CloudImage className="payment-qr" src={state.paymentDetails.qr} alt="GCash QR"/><Button kind="secondary" onClick={()=>update({paymentDetails:{...state.paymentDetails,qr:''}})}>Remove QR</Button></>}<button className="button">Save GCash number</button></form></section><section className="panel"><h2>Verification queue</h2><Field label="Show payments" options={['Pending proofs','All payments']} value={filter} onChange={setFilter}/>{orders.length?orders.map(order=><div className="list-row" key={order.id}><Link to={'/admin/orders/'+order.id}>{order.id}</Link><span>{money(order.total)} · {paymentLabel(order)}</span></div>):<p>No payments match this filter.</p>}<div className="actions"><Button to="/admin/orders" kind="secondary">Review orders</Button></div></section></div></main>
 }
 
 export function SignedInChat(){
@@ -435,11 +436,11 @@ export function Messages({admin=false,compact=false,active=true,onMinimize,onClo
       {conversation.length?conversation.map(item=><article className={'chat-bubble '+(item.sender===(admin?'admin':'customer')?'chat-mine':'')} key={item.id}>
         <small>{item.sender==='admin'?'tap.io admin':'Customer'}</small>
         {item.text&&<p>{item.text}</p>}
-        {item.image&&<img src={item.image} alt="Chat attachment"/>}
+        {item.image&&<CloudImage src={item.image} alt="Chat attachment"/>}
       </article>):<p className="chat-empty">No messages yet.</p>}
     </div>
     <form className="chat-compose" onSubmit={send}>
-      {attachment&&<div className="chat-attachment"><img src={attachment} alt="Selected image"/><button type="button" className="icon" aria-label="Remove attachment" onClick={()=>setAttachment('')}><X size={18}/></button></div>}
+      {attachment&&<div className="chat-attachment"><CloudImage src={attachment} alt="Selected image"/><button type="button" className="icon" aria-label="Remove attachment" onClick={()=>setAttachment('')}><X size={18}/></button></div>}
       <div className="chat-input-row">
         <label className="icon chat-attach"><ImagePlus size={21} aria-hidden="true"/><input type="file" aria-label="Attach image" accept="image/png,image/jpeg,image/webp,image/gif" onChange={attach}/></label>
         <input aria-label="Your message" value={message} onChange={event=>setMessage(event.target.value)} placeholder="Aa" maxLength={2000}/>

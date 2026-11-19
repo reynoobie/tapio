@@ -92,10 +92,14 @@ export const adminService = {
 export const analyticsService = {
   async getSample() {
     if (!auth.currentUser) return []
-    const snapshot = await getDocs(collection(db, 'analytics', auth.currentUser.uid, 'days'))
-    return snapshot.docs
-      .map((row) => ({ day: row.id, ...row.data() }))
-      .sort((a, b) => a.day.localeCompare(b.day))
-      .slice(-7)
+    const snapshot = await getDocs(collection(db, 'analytics', auth.currentUser.uid, 'events'))
+    const days = new Map()
+    for (const row of snapshot.docs) {
+      const { day, event } = row.data()
+      const value = days.get(day) || { day, taps: 0, links: 0, contacts: 0 }
+      if (['taps', 'links', 'contacts'].includes(event)) value[event]++
+      days.set(day, value)
+    }
+    return [...days.values()].sort((a,b)=>a.day.localeCompare(b.day)).slice(-7)
   },
 }

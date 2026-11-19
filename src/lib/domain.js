@@ -15,8 +15,8 @@ export function publicProfile(profile) {
   return result
 }
 export function priceOrder(lines, products) {
-  if (!Array.isArray(lines) || !lines.length || lines.length > 40)
-    throw new Error('Choose between 1 and 40 card designs per order.')
+  if (!Array.isArray(lines) || !lines.length || lines.length > 8)
+    throw new Error('Choose between 1 and eight card designs per order.')
   const quantities = new Map()
   const items = lines.map((line) => {
     const product = products.get(line.productId)

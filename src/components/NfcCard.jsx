@@ -1,3 +1,4 @@
+import {CloudImage} from './CloudImage'
 import {useLayoutEffect,useRef} from 'react'
 import {QRCodeSVG} from 'qrcode.react'
 import {BRAND} from './brand'
@@ -36,7 +37,7 @@ export default function NfcCard({variant='classic',name,title,logoSrc,colorA='#3
   return <div className={'nfc-card nfc-card--'+variant} style={style} onClick={onFlip}>
     <div ref={faceRef} className="nfc-face nfc-front" aria-hidden={flipped}>
       <Ripples/><div className="nfc-person"><div ref={nameRef} className="nfc-name">{name||'Your Name'}</div>{title!==null&&<div className="nfc-title">{title||'Your title'}</div>}</div><Waves/>
-      <div className="nfc-brand">{logoSrc?<img className="nfc-uploaded-logo" src={logoSrc} alt=""/>:<Mark/>}<span>{BRAND}</span></div>
+      <div className="nfc-brand">{logoSrc?<CloudImage className="nfc-uploaded-logo" src={logoSrc} alt=""/>:<Mark/>}<span>{BRAND}</span></div>
     </div>
     <div className="nfc-face nfc-back" aria-hidden={!flipped}>
       <Ripples/><div className="nfc-back-brand"><Mark/><span>{BRAND}</span></div>
