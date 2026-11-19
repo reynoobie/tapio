@@ -303,11 +303,20 @@ export function AdminOverview(){
   const attention=state.orders.filter(order=>awaitsReview(order)||awaitsShipping(order))
   return <main><PageHead title="Admin" description="Manage your store, customers, and card activations."/><Stats items={[[ 'Customers',state.customers.length],['Orders',state.orders.length],['Active cards',state.cards.filter(c=>c.status==='Claimed').length],['Unclaimed cards',state.cards.filter(c=>c.status==='Unclaimed').length]]}/><section className="panel dashboard-grid"><h2>Needs attention</h2>{attention.length?<ul>{attention.map(order=><li key={order.id}><Link className="checklist-link" to={'/admin/orders/'+order.id}>{order.id}</Link> · {awaitsReview(order)?'Verify payment proof':'Prepare shipment'}</li>)}</ul>:<p>No orders need attention.</p>}</section></main>
 }
+function CustomerProfileStatus({username,mode}){
+  const [result,setResult]=useState(null)
+  useEffect(()=>{
+    if(!username||!modes.includes(mode))return
+    return onSnapshot(doc(db,'publicProfiles',username,'modes',mode),snapshot=>setResult({username,mode,label:snapshot.exists()?'Published':'Draft'}),()=>setResult({username,mode,label:'Unavailable'}))
+  },[username,mode])
+  if(!username||!modes.includes(mode))return 'Draft'
+  return result?.username===username&&result.mode===mode?result.label:'Loading…'
+}
 export function Customers(){
   const {state}=useStore()
   const [search,setSearch]=useState('')
-  const customers=state.customers.filter(user=>(user.account.name+' '+user.account.email).toLowerCase().includes(search.toLowerCase()))
-  return <main><PageHead title="Customers"/><Field label="Search customers" value={search} onChange={setSearch}/>{customers.length?<div className="table-wrap"><table><thead><tr><th>Name</th><th>Email</th><th>Profile</th><th>Registered</th></tr></thead><tbody>{customers.map(user=><tr key={user.id}><td>{user.account.name}</td><td>{user.account.email}</td><td>{user.published[user.active]?'Published':'Draft'}</td><td>{user.account.createdAt?.slice(0,10)}</td></tr>)}</tbody></table></div>:<Empty title="No matching customers"/>}</main>
+  const customers=state.customers.filter(user=>((user.account?.name||'')+' '+(user.account?.email||'')).toLowerCase().includes(search.toLowerCase()))
+  return <main><PageHead title="Customers"/><Field label="Search customers" value={search} onChange={setSearch}/>{customers.length?<div className="table-wrap"><table><thead><tr><th>Name</th><th>Email</th><th>Profile</th><th>Registered</th></tr></thead><tbody>{customers.map(user=><tr key={user.id}><td>{user.account?.name||'Unnamed account'}</td><td>{user.account?.email||'—'}</td><td><CustomerProfileStatus username={user.account?.username} mode={user.active}/></td><td>{typeof user.account?.createdAt==='string'?user.account.createdAt.slice(0,10):'—'}</td></tr>)}</tbody></table></div>:<Empty title="No matching customers"/>}</main>
 }
 export function Products(){
   const {state,update,setNotice}=useStore()
